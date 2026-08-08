@@ -7,6 +7,7 @@ Run:
     streamlit run app.py
 """
 
+import io
 import os
 import shutil
 import tempfile
@@ -501,6 +502,46 @@ def render_mp4(
     return data
 
 
+def render_lightcurve_png(
+    m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
+    n_samples, n_frames, primary_color, planet_color, target, fps,
+    progress_callback=None,
+):
+    """Static light-curve PNG with the same title as the GIF/MP4."""
+    m2 = m2_jup * M_JUP_MSUN
+    r2 = r2_jup * R_JUP_RSUN
+    sim = run_simulation(
+        m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+        n_samples, n_frames, 1,
+    )
+    P = sim["P"]
+    t_mid = sim["t_mid"]
+    L_total = sim["L_total"]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.suptitle(_animation_title(sim, target, m1, r1, L1, m2_jup, r2_jup, e, omega, i))
+    fig.subplots_adjust(top=0.78)
+
+    phase_bg = (sim["t_bg"] - t_mid) / P
+    ax.plot(phase_bg, sim["L_bg"], color="black", lw=1)
+    L_min_plot = float(np.min(sim["L_bg"]))
+    depth = max(L_total - L_min_plot, 1e-6 * L_total)
+    y_pad = max(0.35 * depth, 1e-4 * L_total)
+    ax.set_ylim(L_min_plot - y_pad, L_total + y_pad)
+    ax.set_xlim((sim["t_view0"] - t_mid) / P, (sim["t_view1"] - t_mid) / P)
+    ax.set_xlabel("Phase")
+    ax.set_ylabel("Solar Luminosities")
+    ax.grid(True, alpha=0.3)
+    ax.axvline(0, color="gray", lw=1, ls="--")
+
+    buf = io.BytesIO()
+    try:
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        return buf.getvalue()
+    finally:
+        plt.close(fig)
+
+
 # ====================================================
 # Sidebar controls (form: values apply only on submit / Enter)
 # ====================================================
@@ -546,7 +587,7 @@ with st.sidebar:
 # ====================================================
 # Generate (first load, or form submit / Enter)
 # ====================================================
-if generate or "gif_bytes" not in st.session_state:
+if generate or "gif_bytes" not in st.session_state or "lc_png_bytes" not in st.session_state:
     m2 = m2_jup * M_JUP_MSUN
     r2 = r2_jup * R_JUP_RSUN
     anim_kwargs = dict(
@@ -574,8 +615,10 @@ if generate or "gif_bytes" not in st.session_state:
         gif_bytes = cached_render(
             render_gif, "gif", anim_kwargs, progress_callback=_gif_progress,
         )
+        lc_png_bytes = cached_render(render_lightcurve_png, "lc_png", anim_kwargs)
         # Keep diagnostics only — not full light-curve arrays — to save memory.
         st.session_state["gif_bytes"] = gif_bytes
+        st.session_state["lc_png_bytes"] = lc_png_bytes
         st.session_state["sim"] = {
             "P": sim["P"],
             "sma": sim["sma"],
@@ -602,6 +645,7 @@ if generate or "gif_bytes" not in st.session_state:
         gif_progress_bar.empty()
 
 gif_bytes = st.session_state["gif_bytes"]
+lc_png_bytes = st.session_state["lc_png_bytes"]
 sim = st.session_state["sim"]
 anim_kwargs = st.session_state["anim_kwargs"]
 display = st.session_state["display"]
@@ -671,10 +715,10 @@ with st.expander("Diagnostics", expanded=True):
         )
 
 # ====================================================
-# Export GIF / MP4 (download only — no embedded video player)
+# Export GIF / light-curve PNG / MP4 (download only)
 # ====================================================
 st.subheader("Export")
-col_gif, col_mp4 = st.columns(2)
+col_gif, col_png, col_mp4 = st.columns(3)
 
 with col_gif:
     st.download_button(
@@ -682,6 +726,14 @@ with col_gif:
         data=gif_bytes,
         file_name=f"{base_name}.gif",
         mime="image/gif",
+    )
+
+with col_png:
+    st.download_button(
+        "Download light curve",
+        data=lc_png_bytes,
+        file_name=f"{base_name}_lightcurve.png",
+        mime="image/png",
     )
 
 with col_mp4:
