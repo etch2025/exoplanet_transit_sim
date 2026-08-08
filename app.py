@@ -559,7 +559,7 @@ with st.sidebar:
         m2_jup = st.number_input("Mass [M♃]", value=1.0, min_value=0.0, format="%.6f")
         r2_jup = st.number_input("Radius [R♃]", value=1.0, min_value=1e-6, format="%.6f")
         st.caption("Planet luminosity is fixed at 0. Mass/radius in Jupiter units.")
-        planet_color = st.color_picker("Planet color", "#A18555")
+        planet_color = st.color_picker("Planet color", "#714A22")
 
         st.subheader("Orbit")
         orbit_input = st.radio("Specify orbit by", ["a", "P"], horizontal=True, index=0)
