@@ -1,0 +1,16 @@
+Orbital Period: 4330.7845 days
+Semi-major axis: 5.2038 AU   (periastron: 1066.6668 R☉, apastron: 1176.3504 R☉)
+Eccentricity: 0.0489   Argument of Periastron: 0.0000°
+Primary Eclipse:   duration 1821.0086 min, min separation 0.8967 R☉, L_min = 0.9894 L☉
+Secondary Eclipse: duration 1821.0086 min, min separation 1.1016 R☉, L_min = 1.0000 L☉
+Primary Transit Duration: 1823.2158 minutes
+Primary Impact Parameter: 0.3905 R☉,    b/r₁ = 0.3905
+Primary Minimum Inclination for Eclipse: [89.9435°, 90.0565°]
+Primary Minimum Grazing Eclipse Inclination: [89.9541°, 90.0459°]
+Secondary Transit Duration: 1823.2158 minutes
+Secondary Impact Parameter: 0.3905 R☉,    b/r₁ = 0.3905
+Secondary Minimum Inclination for Eclipse: [89.9435°, 90.0565°]
+Secondary Minimum Grazing Eclipse Inclination: [89.9541°, 90.0459°]
+Possible Semi-Major Axis for Eclipse: 0.0054 <= a < 14.6937 AU
+Minimum Possible Orbital Period: 0.1440 <= P < 20548.7068 days
+Animation saved to 'Simulated Jupiter Transit of Sun_4330.784d_5.204AU_3000_0.0489_3000frames_30.mp4'

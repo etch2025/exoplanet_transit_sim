@@ -1,0 +1,16 @@
+Orbital Period: 364.9995 days
+Semi-major axis: 1.0000 AU   (periastron: 215.1573 R☉, apastron: 215.8772 R☉)
+Eccentricity: 0.0017   Argument of Periastron: 0.0000°
+Primary Eclipse:   duration 781.1457 min, min separation 0.9908 R☉, L_min = 0.9999 L☉
+Secondary Eclipse: duration 781.1457 min, min separation 1.0090 R☉, L_min = 1.0000 L☉
+Primary Transit Duration: 781.2269 minutes
+Primary Impact Parameter: 0.0752 R☉,    b/r₁ = 0.0752
+Primary Minimum Inclination for Eclipse: [89.7317°, 90.2683°]
+Primary Minimum Grazing Eclipse Inclination: [89.7366°, 90.2634°]
+Secondary Transit Duration: 781.2269 minutes
+Secondary Impact Parameter: 0.0752 R☉,    b/r₁ = 0.0752
+Secondary Minimum Inclination for Eclipse: [89.7317°, 90.2683°]
+Secondary Minimum Grazing Eclipse Inclination: [89.7366°, 90.2634°]
+Possible Semi-Major Axis for Eclipse: 0.0047 <= a < 13.4145 AU
+Minimum Possible Orbital Period: 0.1172 <= P < 17933.0903 days
+Animation saved to 'Simulated Transit of Earth across Sun_364.999d_1.000AU_1000_0.00167_1000frames_30.mp4'
