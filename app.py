@@ -502,79 +502,118 @@ def render_mp4(
 
 
 # ====================================================
-# Sidebar controls
+# Sidebar controls (form: values apply only on submit / Enter)
 # ====================================================
 with st.sidebar:
-    st.header("System")
-    target = st.text_input("Target name", "Simulated Jupiter Transit of Sun")
+    with st.form("transit_params"):
+        st.header("System")
+        target = st.text_input("Target name", "Simulated Jupiter Transit of Sun")
 
-    st.subheader("Star (m₁)")
-    m1 = st.number_input("Mass [M☉]", value=1.0, min_value=0.01, format="%.6f")
-    r1 = st.number_input("Radius [R☉]", value=1.0, min_value=0.01, format="%.6f")
-    L1 = st.number_input("Luminosity [L☉]", value=1.0, min_value=0.0, format="%.6f")
-    primary_color = st.color_picker("Star color", "#FFA500")
+        st.subheader("Star (m₁)")
+        m1 = st.number_input("Mass [M☉]", value=1.0, min_value=0.01, format="%.6f")
+        r1 = st.number_input("Radius [R☉]", value=1.0, min_value=0.01, format="%.6f")
+        L1 = st.number_input("Luminosity [L☉]", value=1.0, min_value=0.0, format="%.6f")
+        primary_color = st.color_picker("Star color", "#FFA500")
 
-    st.subheader("Planet (m₂)")
-    m2_jup = st.number_input("Mass [M♃]", value=1.0, min_value=0.0, format="%.6f")
-    r2_jup = st.number_input("Radius [R♃]", value=1.0, min_value=1e-6, format="%.6f")
-    st.caption("Planet luminosity is fixed at 0. Mass/radius in Jupiter units.")
-    planet_color = st.color_picker("Planet color", "#0000FF")
+        st.subheader("Planet (m₂)")
+        m2_jup = st.number_input("Mass [M♃]", value=1.0, min_value=0.0, format="%.6f")
+        r2_jup = st.number_input("Radius [R♃]", value=1.0, min_value=1e-6, format="%.6f")
+        st.caption("Planet luminosity is fixed at 0. Mass/radius in Jupiter units.")
+        planet_color = st.color_picker("Planet color", "#A18555")
 
-    st.subheader("Orbit")
-    orbit_input = st.radio("Specify orbit by", ["a", "P"], horizontal=True, index=0)
-    a_AU = st.number_input("Semi-major axis [AU]", value=5.2038, min_value=0.01, format="%.6f")
-    P_days = st.number_input("Period [days]", value=4330.7845, min_value=0.01, format="%.6f")
-    i = st.number_input("Inclination [deg]", 0.0, 180.0, 89.98, 0.01, format="%.6f")
-    e = st.number_input("Eccentricity", 0.0, 0.9999, 0.0489, 0.00001, format="%.6f")
-    omega = st.number_input("Argument of periastron [deg]", value=0.0, format="%.6f")
+        st.subheader("Orbit")
+        orbit_input = st.radio("Specify orbit by", ["a", "P"], horizontal=True, index=0)
+        a_AU = st.number_input("Semi-major axis [AU]", value=5.2038, min_value=0.01, format="%.6f")
+        P_days = st.number_input("Period [days]", value=4330.7845, min_value=0.01, format="%.6f")
+        i = st.number_input("Inclination [deg]", 0.0, 180.0, 89.98, 0.01, format="%.6f")
+        e = st.number_input("Eccentricity", 0.0, 0.9999, 0.0489, 0.00001, format="%.6f")
+        omega = st.number_input("Argument of periastron [deg]", value=0.0, format="%.6f")
 
-    st.subheader("Resolution")
-    n_samples = st.number_input(
-        "Light-curve samples / period", value=500_000, min_value=1_000, step=100_000,
-    )
-    n_frames = st.number_input(
-        "Animation frames (transit window)", value=200, min_value=2, step=10,
-    )
-    fps = st.number_input("Animation FPS", value=30, min_value=1, step=1)
+        st.subheader("Resolution")
+        n_samples = st.number_input(
+            "Light-curve samples / period", value=500_000, min_value=1_000, step=100_000,
+        )
+        n_frames = st.number_input(
+            "Animation frames (transit window)", value=200, min_value=2, step=10,
+        )
+        fps = st.number_input(
+            "Animation FPS", value=30, min_value=1, step=1,
+            help="Lower FPS = slower playback.",
+        )
 
-# Convert planet parameters from Jupiter → solar units for the physics engine.
-m2 = m2_jup * M_JUP_MSUN
-r2 = r2_jup * R_JUP_RSUN
+        generate = st.form_submit_button("Generate Light Curve", type="primary")
 
 # ====================================================
-# Run simulation + GIF preview
+# Generate (first load, or form submit / Enter)
 # ====================================================
-sim = run_simulation(
-    m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
-    n_samples, n_frames, 1,
-)
-
-anim_kwargs = dict(
-    m1=m1, r1=r1, L1=L1, m2_jup=m2_jup, r2_jup=r2_jup,
-    orbit_input=orbit_input, P_days=P_days, a_AU=a_AU,
-    i=i, e=e, omega=omega,
-    n_samples=n_samples, n_frames=n_frames,
-    primary_color=primary_color, planet_color=planet_color,
-    target=target, fps=fps,
-)
-
-gif_progress_bar = st.progress(0.0, text="Rendering GIF frames…")
-
-
-def _gif_progress(current_frame, total_frames):
-    frac = (current_frame + 1) / total_frames
-    gif_progress_bar.progress(
-        frac, text=f"Rendering GIF frame {current_frame + 1}/{total_frames}"
+if generate or "gif_bytes" not in st.session_state:
+    m2 = m2_jup * M_JUP_MSUN
+    r2 = r2_jup * R_JUP_RSUN
+    anim_kwargs = dict(
+        m1=m1, r1=r1, L1=L1, m2_jup=m2_jup, r2_jup=r2_jup,
+        orbit_input=orbit_input, P_days=P_days, a_AU=a_AU,
+        i=i, e=e, omega=omega,
+        n_samples=n_samples, n_frames=n_frames,
+        primary_color=primary_color, planet_color=planet_color,
+        target=target, fps=fps,
     )
 
+    gif_progress_bar = st.progress(0.0, text="Rendering GIF frames…")
 
-gif_bytes = cached_render(render_gif, "gif", anim_kwargs, progress_callback=_gif_progress)
-gif_progress_bar.empty()  # cache hits skip the callback, so just clear it when done
-st.image(gif_bytes, caption="Transit animation (phase 0 = mid-transit)", use_container_width=True)
+    def _gif_progress(current_frame, total_frames):
+        frac = (current_frame + 1) / total_frames
+        gif_progress_bar.progress(
+            frac, text=f"Rendering GIF frame {current_frame + 1}/{total_frames}"
+        )
 
-base_name = (
-    f"{target}_{sim['P']/(24*60**2):.6f}d_{sim['sma']/AU:.6f}AU_"
-    f"{n_frames}_{e:.6f}_{fps}fps"
+    try:
+        sim = run_simulation(
+            m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+            n_samples, n_frames, 1,
+        )
+        gif_bytes = cached_render(
+            render_gif, "gif", anim_kwargs, progress_callback=_gif_progress,
+        )
+        # Keep diagnostics only — not full light-curve arrays — to save memory.
+        st.session_state["gif_bytes"] = gif_bytes
+        st.session_state["sim"] = {
+            "P": sim["P"],
+            "sma": sim["sma"],
+            "r_peri": sim["r_peri"],
+            "r_ap": sim["r_ap"],
+            "transit": sim["transit"],
+            "geo": sim["geo"],
+            "a_min_AU": sim["a_min_AU"],
+            "a_max_AU": sim["a_max_AU"],
+            "P_min": sim["P_min"],
+            "P_max": sim["P_max"],
+        }
+        st.session_state["anim_kwargs"] = anim_kwargs
+        st.session_state["display"] = dict(r1=r1, e=e, omega=omega)
+        st.session_state["base_name"] = (
+            f"{target}_{sim['P']/(24*60**2):.6f}d_{sim['sma']/AU:.6f}AU_"
+            f"{n_frames}_{e:.6f}_{fps}fps"
+        )
+        # Drop any prior MP4 so it doesn't linger in memory after a new run.
+        st.session_state.pop("mp4_bytes", None)
+        st.session_state.pop("mp4_name", None)
+        st.session_state.pop("mp4_error", None)
+    finally:
+        gif_progress_bar.empty()
+
+gif_bytes = st.session_state["gif_bytes"]
+sim = st.session_state["sim"]
+anim_kwargs = st.session_state["anim_kwargs"]
+display = st.session_state["display"]
+base_name = st.session_state["base_name"]
+r1 = display["r1"]
+e = display["e"]
+omega = display["omega"]
+
+st.image(
+    gif_bytes,
+    caption="Transit animation (phase 0 = mid-transit)",
+    use_container_width=True,
 )
 
 # ====================================================
@@ -632,7 +671,7 @@ with st.expander("Diagnostics", expanded=True):
         )
 
 # ====================================================
-# Export GIF / MP4
+# Export GIF / MP4 (download only — no embedded video player)
 # ====================================================
 st.subheader("Export")
 col_gif, col_mp4 = st.columns(2)
@@ -649,7 +688,7 @@ with col_mp4:
     ffmpeg_path = find_ffmpeg()
     if ffmpeg_path is None:
         st.warning("MP4 needs ffmpeg (`brew install ffmpeg`).")
-    if st.button("Generate MP4", disabled=ffmpeg_path is None):
+    if st.button("Prepare MP4 download", disabled=ffmpeg_path is None):
         mp4_progress_bar = st.progress(0.0, text="Rendering MP4 frames…")
 
         def _mp4_progress(current_frame, total_frames):
@@ -660,7 +699,7 @@ with col_mp4:
 
         try:
             st.session_state["mp4_bytes"] = cached_render(
-                render_mp4, "mp4", anim_kwargs, progress_callback=_mp4_progress
+                render_mp4, "mp4", anim_kwargs, progress_callback=_mp4_progress,
             )
             st.session_state["mp4_name"] = f"{base_name}.mp4"
             st.session_state.pop("mp4_error", None)
@@ -670,14 +709,13 @@ with col_mp4:
         finally:
             mp4_progress_bar.empty()
 
-if err := st.session_state.get("mp4_error"):
-    st.error(f"Could not render MP4: {err}")
+    if err := st.session_state.get("mp4_error"):
+        st.error(f"Could not render MP4: {err}")
 
-if mp4_bytes := st.session_state.get("mp4_bytes"):
-    st.video(mp4_bytes)
-    st.download_button(
-        "Download MP4",
-        data=mp4_bytes,
-        file_name=st.session_state.get("mp4_name", "transit.mp4"),
-        mime="video/mp4",
-    )
+    if mp4_bytes := st.session_state.get("mp4_bytes"):
+        st.download_button(
+            "Download MP4",
+            data=mp4_bytes,
+            file_name=st.session_state.get("mp4_name", "transit.mp4"),
+            mime="video/mp4",
+        )
