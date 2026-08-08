@@ -21,7 +21,9 @@ import streamlit as st
 
 
 def find_ffmpeg():
-    """Locate ffmpeg even when Streamlit/IDE PATH omits Homebrew."""
+    """Locate ffmpeg: system install first, then the imageio-ffmpeg
+    bundled static binary (works on Streamlit Cloud / any Linux host
+    with no apt access)."""
     candidates = [
         shutil.which("ffmpeg"),
         "/opt/homebrew/bin/ffmpeg",
@@ -31,6 +33,15 @@ def find_ffmpeg():
     for path in candidates:
         if path and os.path.isfile(path) and os.access(path, os.X_OK):
             return path
+
+    try:
+        import imageio_ffmpeg
+        path = imageio_ffmpeg.get_ffmpeg_exe()
+        if path and os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    except Exception:
+        pass
+
     return None
 
 # ====================================================
@@ -373,8 +384,14 @@ def _build_animation(
 def render_gif(
     m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, primary_color, planet_color, target, fps,
+    _progress_callback=None,
 ):
-    """Cached GIF bytes for the in-app preview / download."""
+    """Cached GIF bytes for the in-app preview / download.
+
+    _progress_callback(current_frame, total_frames) is called by
+    matplotlib during encoding. Leading underscore keeps it out of the
+    cache key (callbacks/placeholders aren't hashable).
+    """
     m2 = m2_jup * M_JUP_MSUN
     r2 = r2_jup * R_JUP_RSUN
     sim = run_simulation(
@@ -388,7 +405,10 @@ def render_gif(
     fd, tmp_path = tempfile.mkstemp(suffix=".gif")
     os.close(fd)
     try:
-        ani.save(tmp_path, writer="pillow", fps=fps, dpi=100)
+        ani.save(
+            tmp_path, writer="pillow", fps=fps, dpi=100,
+            progress_callback=_progress_callback,
+        )
         with open(tmp_path, "rb") as f:
             data = f.read()
     finally:
@@ -402,8 +422,14 @@ def render_gif(
 def render_mp4(
     m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, primary_color, planet_color, target, fps,
+    _progress_callback=None,
 ):
-    """Cached MP4 bytes for video export (requires ffmpeg)."""
+    """Cached MP4 bytes for video export (requires ffmpeg).
+
+    _progress_callback(current_frame, total_frames) is called by
+    matplotlib during encoding. Leading underscore keeps it out of the
+    cache key (callbacks/placeholders aren't hashable).
+    """
     ffmpeg_path = find_ffmpeg()
     if ffmpeg_path is None:
         raise RuntimeError(
@@ -425,7 +451,10 @@ def render_mp4(
     fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
     try:
-        ani.save(tmp_path, writer=animation.FFMpegWriter(fps=fps), dpi=120)
+        ani.save(
+            tmp_path, writer=animation.FFMpegWriter(fps=fps), dpi=120,
+            progress_callback=_progress_callback,
+        )
         with open(tmp_path, "rb") as f:
             data = f.read()
     finally:
@@ -494,7 +523,18 @@ anim_kwargs = dict(
     target=target, fps=fps,
 )
 
-gif_bytes = render_gif(**anim_kwargs)
+gif_progress_bar = st.progress(0.0, text="Rendering GIF frames…")
+
+
+def _gif_progress(current_frame, total_frames):
+    frac = (current_frame + 1) / total_frames
+    gif_progress_bar.progress(
+        frac, text=f"Rendering GIF frame {current_frame + 1}/{total_frames}"
+    )
+
+
+gif_bytes = render_gif(**anim_kwargs, _progress_callback=_gif_progress)
+gif_progress_bar.empty()  # cache hits skip the callback, so just clear it when done
 st.image(gif_bytes, caption="Transit animation (phase 0 = mid-transit)", use_container_width=True)
 
 base_name = (
@@ -575,13 +615,25 @@ with col_mp4:
     if ffmpeg_path is None:
         st.warning("MP4 needs ffmpeg (`brew install ffmpeg`).")
     if st.button("Generate MP4", disabled=ffmpeg_path is None):
+        mp4_progress_bar = st.progress(0.0, text="Rendering MP4 frames…")
+
+        def _mp4_progress(current_frame, total_frames):
+            frac = (current_frame + 1) / total_frames
+            mp4_progress_bar.progress(
+                frac, text=f"Rendering MP4 frame {current_frame + 1}/{total_frames}"
+            )
+
         try:
-            st.session_state["mp4_bytes"] = render_mp4(**anim_kwargs)
+            st.session_state["mp4_bytes"] = render_mp4(
+                **anim_kwargs, _progress_callback=_mp4_progress
+            )
             st.session_state["mp4_name"] = f"{base_name}.mp4"
             st.session_state.pop("mp4_error", None)
         except Exception as exc:
             st.session_state.pop("mp4_bytes", None)
             st.session_state["mp4_error"] = str(exc)
+        finally:
+            mp4_progress_bar.empty()
 
 if err := st.session_state.get("mp4_error"):
     st.error(f"Could not render MP4: {err}")
