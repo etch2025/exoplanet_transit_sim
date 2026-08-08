@@ -39,10 +39,16 @@ def find_ffmpeg():
 AU = 1.5e11
 R_Sol = 6.96e8
 yr = 365 * 24 * 60 * 60
+M_JUP_MSUN = 9.547919e-4   # M_Jup / M_Sun
+R_JUP_RSUN = 0.102792       # R_Jup / R_Sun
 
-st.set_page_config(page_title="Planet Transit Simulator", layout="wide")
-st.title("Planet Transit Simulator")
-st.caption("Interactive Streamlit version of LC_v5__animation_exoplanet.py.")
+st.set_page_config(page_title="Exoplanet Transit Simulator", layout="wide")
+
+
+st.title("Exoplanet Transit Simulator Simulator")
+st.caption("Powered by Matplotlib and NumPy.")
+st.markdown("[Originally from the Eclipsing Binary Stars Simulator](https://github.com/etch2025/eclipsing_binary_stars_sim)")
+st.subheader("Created by [Ethan Chen](https://www.chenastronomy.com/)", divider="gray")
 
 
 # ====================================================
@@ -264,14 +270,14 @@ def run_simulation(
     }
 
 
-def _animation_title(sim, target, m1, r1, L1, m2, r2, e, omega, i):
+def _animation_title(sim, target, m1, r1, L1, m2_jup, r2_jup, e, omega, i):
     P = sim["P"]
     sma = sim["sma"]
     transit = sim["transit"]
     title_str = (
         f"{target}\n"
         rf"m₁ = {m1:.6f} $M_\odot$, r₁ = {r1:.6f} $R_\odot$, L₁ = {L1:.6f} $L_\odot$,    "
-        rf"m₂ = {m2:.6e} $M_\odot$, r₂ = {r2:.6f} $R_\odot$" + "\n"
+        rf"m₂ = {m2_jup:.6f} $M_{{\rm J}}$, r₂ = {r2_jup:.6f} $R_{{\rm J}}$" + "\n"
         f"P = {P/(24*60**2):.6f} d, a = {sma/AU:.6f} AU, e = {e:.6f}, "
         f"ω = {omega:.6f}°, i = {i:.6f}°\n"
     )
@@ -287,7 +293,8 @@ def _animation_title(sim, target, m1, r1, L1, m2, r2, e, omega, i):
 
 
 def _build_animation(
-    sim, r1, r2, e, omega, i, primary_color, planet_color, target, m1, L1, m2, fps,
+    sim, r1, r2, e, omega, i, primary_color, planet_color, target,
+    m1, L1, m2_jup, r2_jup, fps,
 ):
     """Build a FuncAnimation for the transit window (shared by GIF and MP4)."""
     n_frames = len(sim["t_frames"])
@@ -297,7 +304,7 @@ def _build_animation(
     t_mid = sim["t_mid"]
 
     fig, (ax_orbit, ax_lc) = plt.subplots(1, 2, figsize=(13, 6))
-    fig.suptitle(_animation_title(sim, target, m1, r1, L1, m2, r2, e, omega, i))
+    fig.suptitle(_animation_title(sim, target, m1, r1, L1, m2_jup, r2_jup, e, omega, i))
     fig.subplots_adjust(top=0.78, wspace=0.3)
 
     ax_orbit.set_xlim(-1.2 * r1, 1.2 * r1)
@@ -364,16 +371,19 @@ def _build_animation(
 
 @st.cache_data(show_spinner="Rendering transit GIF…")
 def render_gif(
-    m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+    m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, primary_color, planet_color, target, fps,
 ):
     """Cached GIF bytes for the in-app preview / download."""
+    m2 = m2_jup * M_JUP_MSUN
+    r2 = r2_jup * R_JUP_RSUN
     sim = run_simulation(
         m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
         n_samples, n_frames, 1,
     )
     fig, ani = _build_animation(
-        sim, r1, r2, e, omega, i, primary_color, planet_color, target, m1, L1, m2, fps,
+        sim, r1, r2, e, omega, i, primary_color, planet_color, target,
+        m1, L1, m2_jup, r2_jup, fps,
     )
     fd, tmp_path = tempfile.mkstemp(suffix=".gif")
     os.close(fd)
@@ -390,7 +400,7 @@ def render_gif(
 
 @st.cache_data(show_spinner="Rendering transit MP4…")
 def render_mp4(
-    m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+    m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, primary_color, planet_color, target, fps,
 ):
     """Cached MP4 bytes for video export (requires ffmpeg)."""
@@ -402,12 +412,15 @@ def render_mp4(
         )
     matplotlib.rcParams["animation.ffmpeg_path"] = ffmpeg_path
 
+    m2 = m2_jup * M_JUP_MSUN
+    r2 = r2_jup * R_JUP_RSUN
     sim = run_simulation(
         m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
         n_samples, n_frames, 1,
     )
     fig, ani = _build_animation(
-        sim, r1, r2, e, omega, i, primary_color, planet_color, target, m1, L1, m2, fps,
+        sim, r1, r2, e, omega, i, primary_color, planet_color, target,
+        m1, L1, m2_jup, r2_jup, fps,
     )
     fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
@@ -429,7 +442,7 @@ def render_mp4(
 # ====================================================
 with st.sidebar:
     st.header("System")
-    target = st.text_input("Target name", "Simulated Transit of Earth across Sun")
+    target = st.text_input("Target name", "Simulated Jupiter Transit of Sun")
 
     st.subheader("Star (m₁)")
     m1 = st.number_input("Mass [M☉]", value=1.0, min_value=0.01, format="%.6f")
@@ -438,17 +451,17 @@ with st.sidebar:
     primary_color = st.color_picker("Star color", "#FFA500")
 
     st.subheader("Planet (m₂)")
-    m2 = st.number_input("Mass [M☉]", value=3.00150829563e-6, min_value=0.0, format="%.6e")
-    r2 = st.number_input("Radius [R☉]", value=0.00916794, min_value=1e-6, format="%.6f")
-    st.caption("Planet luminosity is fixed at 0.")
+    m2_jup = st.number_input("Mass [M♃]", value=1.0, min_value=0.0, format="%.6f")
+    r2_jup = st.number_input("Radius [R♃]", value=1.0, min_value=1e-6, format="%.6f")
+    st.caption("Planet luminosity is fixed at 0. Mass/radius in Jupiter units.")
     planet_color = st.color_picker("Planet color", "#0000FF")
 
     st.subheader("Orbit")
     orbit_input = st.radio("Specify orbit by", ["a", "P"], horizontal=True, index=0)
-    a_AU = st.number_input("Semi-major axis [AU]", value=1.0, min_value=0.01, format="%.6f")
-    P_days = st.number_input("Period [days]", value=365.25, min_value=0.01, format="%.6f")
+    a_AU = st.number_input("Semi-major axis [AU]", value=5.2038, min_value=0.01, format="%.6f")
+    P_days = st.number_input("Period [days]", value=4330.7845, min_value=0.01, format="%.6f")
     i = st.number_input("Inclination [deg]", 0.0, 180.0, 89.98, 0.01, format="%.6f")
-    e = st.number_input("Eccentricity", 0.0, 0.9999, 0.00167, 0.00001, format="%.6f")
+    e = st.number_input("Eccentricity", 0.0, 0.9999, 0.0489, 0.00001, format="%.6f")
     omega = st.number_input("Argument of periastron [deg]", value=0.0, format="%.6f")
 
     st.subheader("Resolution")
@@ -460,6 +473,10 @@ with st.sidebar:
     )
     fps = st.number_input("Animation FPS", value=30, min_value=1, step=1)
 
+# Convert planet parameters from Jupiter → solar units for the physics engine.
+m2 = m2_jup * M_JUP_MSUN
+r2 = r2_jup * R_JUP_RSUN
+
 # ====================================================
 # Run simulation + GIF preview
 # ====================================================
@@ -469,7 +486,7 @@ sim = run_simulation(
 )
 
 anim_kwargs = dict(
-    m1=m1, r1=r1, L1=L1, m2=m2, r2=r2,
+    m1=m1, r1=r1, L1=L1, m2_jup=m2_jup, r2_jup=r2_jup,
     orbit_input=orbit_input, P_days=P_days, a_AU=a_AU,
     i=i, e=e, omega=omega,
     n_samples=n_samples, n_frames=n_frames,
