@@ -20,6 +20,44 @@ from matplotlib.lines import Line2D
 import streamlit as st
 
 
+import hashlib
+import pickle
+from collections import OrderedDict
+
+MAX_RENDER_CACHE_ENTRIES = 4  # GIF/MP4 bytes are multi-MB each; keep this small
+
+
+def _cache_key(namespace, kwargs):
+    """Stable key for manual caching (order-independent, no Streamlit involved)."""
+    payload = pickle.dumps((namespace, sorted(kwargs.items())))
+    return hashlib.md5(payload).hexdigest()
+
+
+def cached_render(render_fn, namespace, kwargs, progress_callback=None):
+    """Session-scoped, size-bounded LRU cache for render_gif/render_mp4.
+
+    Deliberately NOT st.cache_data: that decorator records every Streamlit
+    call made during a cache miss and replays them on a cache hit, which
+    breaks when the recorded call references a progress-bar placeholder
+    from a previous, now-stale script run (CacheReplayClosureError). This
+    keeps the same "don't re-render identical params" benefit using a
+    plain OrderedDict in session_state instead — capped so repeated
+    slider tweaks within a session can't accumulate unbounded MB-sized
+    GIF/MP4 blobs in memory.
+    """
+    store = st.session_state.setdefault("_render_cache", OrderedDict())
+    key = _cache_key(namespace, kwargs)
+    if key in store:
+        store.move_to_end(key)  # mark as recently used
+        return store[key]
+    data = render_fn(**kwargs, progress_callback=progress_callback)
+    store[key] = data
+    store.move_to_end(key)
+    while len(store) > MAX_RENDER_CACHE_ENTRIES:
+        store.popitem(last=False)  # evict least-recently-used
+    return data
+
+
 def find_ffmpeg():
     """Locate ffmpeg: system install first, then the imageio-ffmpeg
     bundled static binary (works on Streamlit Cloud / any Linux host
@@ -197,7 +235,7 @@ def eclipse_geometry(r_c, nu_c, i, e, P, r1, r2):
     return {"b": b_c, "duration": duration, "i_min": i_min, "i_grazing": i_grazing}
 
 
-@st.cache_data(show_spinner="Running transit simulation…")
+@st.cache_data(show_spinner="Running transit simulation…", max_entries=8, ttl=1800)
 def run_simulation(
     m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, n_periods,
@@ -380,17 +418,15 @@ def _build_animation(
     return fig, ani
 
 
-@st.cache_data(show_spinner="Rendering transit GIF…")
 def render_gif(
     m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, primary_color, planet_color, target, fps,
-    _progress_callback=None,
+    progress_callback=None,
 ):
-    """Cached GIF bytes for the in-app preview / download.
+    """Render GIF bytes (uncached — see `cached_render` for caching + progress).
 
-    _progress_callback(current_frame, total_frames) is called by
-    matplotlib during encoding. Leading underscore keeps it out of the
-    cache key (callbacks/placeholders aren't hashable).
+    progress_callback(current_frame, total_frames) is called by
+    matplotlib during encoding.
     """
     m2 = m2_jup * M_JUP_MSUN
     r2 = r2_jup * R_JUP_RSUN
@@ -407,7 +443,7 @@ def render_gif(
     try:
         ani.save(
             tmp_path, writer="pillow", fps=fps, dpi=100,
-            progress_callback=_progress_callback,
+            progress_callback=progress_callback,
         )
         with open(tmp_path, "rb") as f:
             data = f.read()
@@ -418,17 +454,16 @@ def render_gif(
     return data
 
 
-@st.cache_data(show_spinner="Rendering transit MP4…")
 def render_mp4(
     m1, r1, L1, m2_jup, r2_jup, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, primary_color, planet_color, target, fps,
-    _progress_callback=None,
+    progress_callback=None,
 ):
-    """Cached MP4 bytes for video export (requires ffmpeg).
+    """Render MP4 bytes (uncached — see `cached_render` for caching + progress).
+    Requires ffmpeg.
 
-    _progress_callback(current_frame, total_frames) is called by
-    matplotlib during encoding. Leading underscore keeps it out of the
-    cache key (callbacks/placeholders aren't hashable).
+    progress_callback(current_frame, total_frames) is called by
+    matplotlib during encoding.
     """
     ffmpeg_path = find_ffmpeg()
     if ffmpeg_path is None:
@@ -453,7 +488,7 @@ def render_mp4(
     try:
         ani.save(
             tmp_path, writer=animation.FFMpegWriter(fps=fps), dpi=120,
-            progress_callback=_progress_callback,
+            progress_callback=progress_callback,
         )
         with open(tmp_path, "rb") as f:
             data = f.read()
@@ -483,7 +518,7 @@ with st.sidebar:
     m2_jup = st.number_input("Mass [M♃]", value=1.0, min_value=0.0, format="%.6f")
     r2_jup = st.number_input("Radius [R♃]", value=1.0, min_value=1e-6, format="%.6f")
     st.caption("Planet luminosity is fixed at 0. Mass/radius in Jupiter units.")
-    planet_color = st.color_picker("Planet color", "#A18555")
+    planet_color = st.color_picker("Planet color", "#0000FF")
 
     st.subheader("Orbit")
     orbit_input = st.radio("Specify orbit by", ["a", "P"], horizontal=True, index=0)
@@ -495,7 +530,7 @@ with st.sidebar:
 
     st.subheader("Resolution")
     n_samples = st.number_input(
-        "Light-curve samples / period", value=5_000_000, min_value=1_000, step=100_000,
+        "Light-curve samples / period", value=500_000, min_value=1_000, step=100_000,
     )
     n_frames = st.number_input(
         "Animation frames (transit window)", value=200, min_value=2, step=10,
@@ -533,7 +568,7 @@ def _gif_progress(current_frame, total_frames):
     )
 
 
-gif_bytes = render_gif(**anim_kwargs, _progress_callback=_gif_progress)
+gif_bytes = cached_render(render_gif, "gif", anim_kwargs, progress_callback=_gif_progress)
 gif_progress_bar.empty()  # cache hits skip the callback, so just clear it when done
 st.image(gif_bytes, caption="Transit animation (phase 0 = mid-transit)", use_container_width=True)
 
@@ -624,8 +659,8 @@ with col_mp4:
             )
 
         try:
-            st.session_state["mp4_bytes"] = render_mp4(
-                **anim_kwargs, _progress_callback=_mp4_progress
+            st.session_state["mp4_bytes"] = cached_render(
+                render_mp4, "mp4", anim_kwargs, progress_callback=_mp4_progress
             )
             st.session_state["mp4_name"] = f"{base_name}.mp4"
             st.session_state.pop("mp4_error", None)
