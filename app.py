@@ -264,25 +264,10 @@ def run_simulation(
     }
 
 
-def make_frame_figure(
-    sim, frame_idx, r1, r2, e, omega, i, primary_color, planet_color, target,
-    m1, L1, m2,
-):
+def _animation_title(sim, target, m1, r1, L1, m2, r2, e, omega, i):
     P = sim["P"]
     sma = sim["sma"]
-    a_Rsol = sim["a_Rsol"]
-    L_total = sim["L_total"]
-    t_mid = sim["t_mid"]
     transit = sim["transit"]
-
-    x_t = sim["x_f"][frame_idx]
-    y_t = sim["y_f"][frame_idx]
-    z_t = sim["z_f"][frame_idx]
-    L_t = sim["L_f"][frame_idx]
-    phase = (sim["t_frames"][frame_idx] - t_mid) / P
-
-    fig, (ax_orbit, ax_lc) = plt.subplots(1, 2, figsize=(13, 6))
-
     title_str = (
         f"{target}\n"
         rf"m₁ = {m1:.6f} $M_\odot$, r₁ = {r1:.6f} $R_\odot$, L₁ = {L1:.6f} $L_\odot$,    "
@@ -298,59 +283,13 @@ def make_frame_figure(
         )
     else:
         title_str += "No Transit Occurs"
-
-    fig.suptitle(title_str)
-    fig.subplots_adjust(top=0.78, wspace=0.3)
-
-    ax_orbit.set_xlim(-1.2 * r1, 1.2 * r1)
-    ax_orbit.set_ylim(-1.2 * r1, 1.2 * r1)
-    ax_orbit.set_aspect("equal")
-    ax_orbit.set_xlabel(r"Solar Radii $R_\odot$")
-    ax_orbit.set_ylabel(r"Solar Radii $R_\odot$")
-    ax_orbit.grid(True, alpha=0.3)
-
-    nu_full = np.linspace(0, 2 * np.pi, 500)
-    r_full = a_Rsol * (1 - e**2) / (1 + e * np.cos(nu_full))
-    om = np.radians(omega)
-    inc = np.radians(i)
-    orbit_x = r_full * np.cos(om + nu_full)
-    orbit_y = r_full * np.sin(om + nu_full) * np.cos(inc)
-    ax_orbit.plot(orbit_x, orbit_y, color="black", lw=1, zorder=1)
-
-    star1 = Circle((0, 0), r1, color=primary_color, zorder=(2 if z_t >= 0 else 4))
-    star2 = Circle((x_t, y_t), r2, color=planet_color, zorder=(4 if z_t >= 0 else 2))
-    ax_orbit.add_patch(star1)
-    ax_orbit.add_patch(star2)
-    ax_orbit.legend(
-        handles=[
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=primary_color, markersize=10, label="m1"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=planet_color, markersize=10, label="m2"),
-        ],
-        loc="upper right",
-    )
-    ax_orbit.text(
-        0.02, 0.02, f"phase = {phase:.6f}\nL = {L_t:.6f} $L_\\odot$",
-        transform=ax_orbit.transAxes,
-    )
-
-    phase_bg = (sim["t_bg"] - t_mid) / P
-    ax_lc.plot(phase_bg, sim["L_bg"], color="black", lw=1)
-    L_min_plot = float(np.min(sim["L_bg"]))
-    depth = max(L_total - L_min_plot, 1e-6 * L_total)
-    y_pad = max(0.35 * depth, 1e-4 * L_total)
-    ax_lc.set_ylim(L_min_plot - y_pad, L_total + y_pad)
-    ax_lc.set_xlim((sim["t_view0"] - t_mid) / P, (sim["t_view1"] - t_mid) / P)
-    ax_lc.set_xlabel("Phase")
-    ax_lc.set_ylabel("Solar Luminosities")
-    ax_lc.grid(True, alpha=0.3)
-    ax_lc.plot([phase], [L_t], "o", color="red", ms=8, zorder=3)
-    ax_lc.axvline(phase, color="gray", lw=1, ls="--")
-
-    return fig
+    return title_str
 
 
-def export_mp4(sim, r1, r2, e, omega, i, primary_color, planet_color, fps):
-    """Render the transit window animation to MP4 bytes (requires ffmpeg)."""
+def _build_animation(
+    sim, r1, r2, e, omega, i, primary_color, planet_color, target, m1, L1, m2, fps,
+):
+    """Build a FuncAnimation for the transit window (shared by GIF and MP4)."""
     n_frames = len(sim["t_frames"])
     P = sim["P"]
     a_Rsol = sim["a_Rsol"]
@@ -358,7 +297,9 @@ def export_mp4(sim, r1, r2, e, omega, i, primary_color, planet_color, fps):
     t_mid = sim["t_mid"]
 
     fig, (ax_orbit, ax_lc) = plt.subplots(1, 2, figsize=(13, 6))
+    fig.suptitle(_animation_title(sim, target, m1, r1, L1, m2, r2, e, omega, i))
     fig.subplots_adjust(top=0.78, wspace=0.3)
+
     ax_orbit.set_xlim(-1.2 * r1, 1.2 * r1)
     ax_orbit.set_ylim(-1.2 * r1, 1.2 * r1)
     ax_orbit.set_aspect("equal")
@@ -379,6 +320,13 @@ def export_mp4(sim, r1, r2, e, omega, i, primary_color, planet_color, fps):
     star2_patch = Circle((sim["x_f"][0], sim["y_f"][0]), r2, color=planet_color, zorder=3)
     ax_orbit.add_patch(star1_patch)
     ax_orbit.add_patch(star2_patch)
+    ax_orbit.legend(
+        handles=[
+            Line2D([0], [0], marker="o", color="w", markerfacecolor=primary_color, markersize=10, label="m1"),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor=planet_color, markersize=10, label="m2"),
+        ],
+        loc="upper right",
+    )
     time_text = ax_orbit.text(0.02, 0.02, "", transform=ax_orbit.transAxes)
 
     phase_bg = (sim["t_bg"] - t_mid) / P
@@ -408,6 +356,44 @@ def export_mp4(sim, r1, r2, e, omega, i, primary_color, planet_color, fps):
         time_text.set_text(f"phase = {phase:.6f}\nL = {L_t:.6f} $L_\\odot$")
         return star1_patch, star2_patch, marker, vline, time_text
 
+    ani = animation.FuncAnimation(
+        fig, update, frames=n_frames, interval=1000 / fps, blit=False,
+    )
+    return fig, ani
+
+
+@st.cache_data(show_spinner="Rendering transit GIF…")
+def render_gif(
+    m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+    n_samples, n_frames, primary_color, planet_color, target, fps,
+):
+    """Cached GIF bytes for the in-app preview / download."""
+    sim = run_simulation(
+        m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+        n_samples, n_frames, 1,
+    )
+    fig, ani = _build_animation(
+        sim, r1, r2, e, omega, i, primary_color, planet_color, target, m1, L1, m2, fps,
+    )
+    fd, tmp_path = tempfile.mkstemp(suffix=".gif")
+    os.close(fd)
+    try:
+        ani.save(tmp_path, writer="pillow", fps=fps, dpi=100)
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+    finally:
+        plt.close(fig)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    return data
+
+
+@st.cache_data(show_spinner="Rendering transit MP4…")
+def render_mp4(
+    m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+    n_samples, n_frames, primary_color, planet_color, target, fps,
+):
+    """Cached MP4 bytes for video export (requires ffmpeg)."""
     ffmpeg_path = find_ffmpeg()
     if ffmpeg_path is None:
         raise RuntimeError(
@@ -416,12 +402,17 @@ def export_mp4(sim, r1, r2, e, omega, i, primary_color, planet_color, fps):
         )
     matplotlib.rcParams["animation.ffmpeg_path"] = ffmpeg_path
 
-    ani = animation.FuncAnimation(fig, update, frames=n_frames, interval=1000 / fps, blit=False)
+    sim = run_simulation(
+        m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
+        n_samples, n_frames, 1,
+    )
+    fig, ani = _build_animation(
+        sim, r1, r2, e, omega, i, primary_color, planet_color, target, m1, L1, m2, fps,
+    )
     fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
     try:
-        writer = animation.FFMpegWriter(fps=fps)
-        ani.save(tmp_path, writer=writer)
+        ani.save(tmp_path, writer=animation.FFMpegWriter(fps=fps), dpi=120)
         with open(tmp_path, "rb") as f:
             data = f.read()
     finally:
@@ -461,36 +452,38 @@ with st.sidebar:
     omega = st.number_input("Argument of periastron [deg]", value=0.0, format="%.6f")
 
     st.subheader("Resolution")
-    n_samples = st.select_slider(
-        "Light-curve samples / period",
-        options=[50_000, 100_000, 200_000, 500_000, 1_000_000, 5_000_000],
-        value=5_000_000,
+    n_samples = st.number_input(
+        "Light-curve samples / period", value=5_000_000, min_value=1_000, step=100_000,
     )
-    n_frames = st.slider("Animation frames (transit window)", 50, 2000, 400, 50)
-    fps = st.slider("Export FPS", 10, 60, 30, 5)
+    n_frames = st.number_input(
+        "Animation frames (transit window)", value=200, min_value=2, step=10,
+    )
+    fps = st.number_input("Animation FPS", value=30, min_value=1, step=1)
 
 # ====================================================
-# Run simulation
+# Run simulation + GIF preview
 # ====================================================
 sim = run_simulation(
     m1, r1, L1, m2, r2, orbit_input, P_days, a_AU, i, e, omega,
     n_samples, n_frames, 1,
 )
 
-frame_idx = st.slider(
-    "Transit phase scrubber",
-    min_value=0,
-    max_value=max(n_frames - 1, 0),
-    value=n_frames // 2,
-    help="Scrub through the transit window. Mid-transit is phase 0.",
+anim_kwargs = dict(
+    m1=m1, r1=r1, L1=L1, m2=m2, r2=r2,
+    orbit_input=orbit_input, P_days=P_days, a_AU=a_AU,
+    i=i, e=e, omega=omega,
+    n_samples=n_samples, n_frames=n_frames,
+    primary_color=primary_color, planet_color=planet_color,
+    target=target, fps=fps,
 )
 
-fig = make_frame_figure(
-    sim, frame_idx, r1, r2, e, omega, i, primary_color, planet_color, target,
-    m1, L1, m2,
+gif_bytes = render_gif(**anim_kwargs)
+st.image(gif_bytes, caption="Transit animation (phase 0 = mid-transit)", use_container_width=True)
+
+base_name = (
+    f"{target}_{sim['P']/(24*60**2):.6f}d_{sim['sma']/AU:.6f}AU_"
+    f"{n_frames}_{e:.6f}_{fps}fps"
 )
-st.pyplot(fig, clear_figure=True)
-plt.close(fig)
 
 # ====================================================
 # Diagnostics
@@ -547,25 +540,27 @@ with st.expander("Diagnostics", expanded=True):
         )
 
 # ====================================================
-# Optional MP4 export
+# Export GIF / MP4
 # ====================================================
-st.subheader("Export animation")
-ffmpeg_path = find_ffmpeg()
-if ffmpeg_path:
-    st.caption(f"ffmpeg: `{ffmpeg_path}` · ~{max(n_frames / max(fps, 1) * 2, 10):.0f}s+ render for {n_frames} frames")
-else:
-    st.warning("ffmpeg not found on PATH. Install with `brew install ffmpeg`.")
+st.subheader("Export")
+col_gif, col_mp4 = st.columns(2)
 
-if st.button("Generate MP4", disabled=ffmpeg_path is None):
-    with st.spinner("Rendering animation… this can take a minute"):
+with col_gif:
+    st.download_button(
+        "Download GIF",
+        data=gif_bytes,
+        file_name=f"{base_name}.gif",
+        mime="image/gif",
+    )
+
+with col_mp4:
+    ffmpeg_path = find_ffmpeg()
+    if ffmpeg_path is None:
+        st.warning("MP4 needs ffmpeg (`brew install ffmpeg`).")
+    if st.button("Generate MP4", disabled=ffmpeg_path is None):
         try:
-            st.session_state["mp4_bytes"] = export_mp4(
-                sim, r1, r2, e, omega, i, primary_color, planet_color, fps,
-            )
-            st.session_state["mp4_name"] = (
-                f"{target}_{sim['P']/(24*60**2):.6f}d_{sim['sma']/AU:.6f}AU_"
-                f"{n_frames}_{e:.6f}_{n_frames}frames_{fps}.mp4"
-            )
+            st.session_state["mp4_bytes"] = render_mp4(**anim_kwargs)
+            st.session_state["mp4_name"] = f"{base_name}.mp4"
             st.session_state.pop("mp4_error", None)
         except Exception as exc:
             st.session_state.pop("mp4_bytes", None)
@@ -575,10 +570,10 @@ if err := st.session_state.get("mp4_error"):
     st.error(f"Could not render MP4: {err}")
 
 if mp4_bytes := st.session_state.get("mp4_bytes"):
+    st.video(mp4_bytes)
     st.download_button(
         "Download MP4",
         data=mp4_bytes,
         file_name=st.session_state.get("mp4_name", "transit.mp4"),
         mime="video/mp4",
     )
-    st.video(mp4_bytes)
