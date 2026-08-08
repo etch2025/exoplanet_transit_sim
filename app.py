@@ -377,13 +377,6 @@ def _build_animation(
     star2_patch = Circle((sim["x_f"][0], sim["y_f"][0]), r2, color=planet_color, zorder=3)
     ax_orbit.add_patch(star1_patch)
     ax_orbit.add_patch(star2_patch)
-    ax_orbit.legend(
-        handles=[
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=primary_color, markersize=10),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=planet_color, markersize=10),
-        ],
-        loc="upper right",
-    )
     time_text = ax_orbit.text(0.02, 0.02, "", transform=ax_orbit.transAxes)
 
     phase_bg = (sim["t_bg"] - t_mid) / P
@@ -547,26 +540,26 @@ def render_lightcurve_png(
 with st.sidebar:
     with st.form("transit_params"):
         st.header("System")
-        target = st.text_input("Target name", "Simulated Jupiter Transit of Sun")
+        target = st.text_input("Target name", "WASP-12b")
 
         st.subheader("Star (m₁)")
-        m1 = st.number_input("Mass [M☉]", value=1.0, min_value=0.01, format="%.6f")
-        r1 = st.number_input("Radius [R☉]", value=1.0, min_value=0.01, format="%.6f")
-        L1 = st.number_input("Luminosity [L☉]", value=1.0, min_value=0.0, format="%.6f")
+        m1 = st.number_input("Mass [M☉]", value=1.325000, min_value=0.01, format="%.6f")
+        r1 = st.number_input("Radius [R☉]", value=1.690000, min_value=0.01, format="%.6f")
+        L1 = st.number_input("Luminosity [L☉]", value=4.05, min_value=0.0, format="%.6f")
         primary_color = st.color_picker("Star color", "#FFA500")
 
         st.subheader("Planet (m₂)")
-        m2_jup = st.number_input("Mass [M♃]", value=1.0, min_value=0.0, format="%.6f")
-        r2_jup = st.number_input("Radius [R♃]", value=1.0, min_value=1e-6, format="%.6f")
+        m2_jup = st.number_input("Mass [M♃]", value=1.470000, min_value=0.0, format="%.6f")
+        r2_jup = st.number_input("Radius [R♃]", value=1.937000, min_value=1e-6, format="%.6f")
         st.caption("Planet luminosity is fixed at 0. Mass/radius in Jupiter units.")
         planet_color = st.color_picker("Planet color", "#714A22")
 
         st.subheader("Orbit")
         orbit_input = st.radio("Specify orbit by", ["a", "P"], horizontal=True, index=0)
-        a_AU = st.number_input("Semi-major axis [AU]", value=5.2038, min_value=0.01, format="%.6f")
+        a_AU = st.number_input("Semi-major axis [AU]", value=0.023400, min_value=0.01, format="%.6f")
         P_days = st.number_input("Period [days]", value=4330.7845, min_value=0.01, format="%.6f")
-        i = st.number_input("Inclination [deg]", 0.0, 180.0, 89.98, 0.01, format="%.6f")
-        e = st.number_input("Eccentricity", 0.0, 0.9999, 0.0489, 0.00001, format="%.6f")
+        i = st.number_input("Inclination [deg]", 0.0, 180.0, 81.92, 0.01, format="%.6f")
+        e = st.number_input("Eccentricity", 0.0, 0.9999, 0.049000, 0.00001, format="%.6f")
         omega = st.number_input("Argument of periastron [deg]", value=0.0, format="%.6f")
 
         st.subheader("Resolution")
