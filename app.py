@@ -8,13 +8,30 @@ Run:
 """
 
 import os
+import shutil
 import tempfile
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Circle
 from matplotlib.lines import Line2D
 import streamlit as st
+
+
+def find_ffmpeg():
+    """Locate ffmpeg even when Streamlit/IDE PATH omits Homebrew."""
+    candidates = [
+        shutil.which("ffmpeg"),
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
 
 # ====================================================
 # Constants
@@ -391,17 +408,28 @@ def export_mp4(sim, r1, r2, e, omega, i, primary_color, planet_color, fps):
         time_text.set_text(f"phase = {phase:.6f}\nL = {L_t:.6f} $L_\\odot$")
         return star1_patch, star2_patch, marker, vline, time_text
 
+    ffmpeg_path = find_ffmpeg()
+    if ffmpeg_path is None:
+        raise RuntimeError(
+            "ffmpeg not found. Install it (e.g. `brew install ffmpeg`) "
+            "or add it to PATH."
+        )
+    matplotlib.rcParams["animation.ffmpeg_path"] = ffmpeg_path
+
     ani = animation.FuncAnimation(fig, update, frames=n_frames, interval=1000 / fps, blit=False)
-    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-        tmp_path = tmp.name
+    fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+    os.close(fd)
     try:
-        ani.save(tmp_path, writer="ffmpeg", fps=fps)
+        writer = animation.FFMpegWriter(fps=fps)
+        ani.save(tmp_path, writer=writer)
         with open(tmp_path, "rb") as f:
             data = f.read()
     finally:
         plt.close(fig)
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
+    if not data:
+        raise RuntimeError("ffmpeg produced an empty MP4.")
     return data
 
 
@@ -436,7 +464,7 @@ with st.sidebar:
     n_samples = st.select_slider(
         "Light-curve samples / period",
         options=[50_000, 100_000, 200_000, 500_000, 1_000_000, 5_000_000],
-        value=200_000,
+        value=5_000_000,
     )
     n_frames = st.slider("Animation frames (transit window)", 50, 2000, 400, 50)
     fps = st.slider("Export FPS", 10, 60, 30, 5)
@@ -522,18 +550,35 @@ with st.expander("Diagnostics", expanded=True):
 # Optional MP4 export
 # ====================================================
 st.subheader("Export animation")
-st.write("Optional: render the transit window to MP4 (requires ffmpeg).")
-if st.button("Generate MP4"):
+ffmpeg_path = find_ffmpeg()
+if ffmpeg_path:
+    st.caption(f"ffmpeg: `{ffmpeg_path}` · ~{max(n_frames / max(fps, 1) * 2, 10):.0f}s+ render for {n_frames} frames")
+else:
+    st.warning("ffmpeg not found on PATH. Install with `brew install ffmpeg`.")
+
+if st.button("Generate MP4", disabled=ffmpeg_path is None):
     with st.spinner("Rendering animation… this can take a minute"):
         try:
-            mp4_bytes = export_mp4(
+            st.session_state["mp4_bytes"] = export_mp4(
                 sim, r1, r2, e, omega, i, primary_color, planet_color, fps,
             )
-            fname = (
+            st.session_state["mp4_name"] = (
                 f"{target}_{sim['P']/(24*60**2):.6f}d_{sim['sma']/AU:.6f}AU_"
                 f"{n_frames}_{e:.6f}_{n_frames}frames_{fps}.mp4"
             )
-            st.download_button("Download MP4", data=mp4_bytes, file_name=fname, mime="video/mp4")
-            st.video(mp4_bytes)
+            st.session_state.pop("mp4_error", None)
         except Exception as exc:
-            st.error(f"Could not render MP4 (is ffmpeg installed?): {exc}")
+            st.session_state.pop("mp4_bytes", None)
+            st.session_state["mp4_error"] = str(exc)
+
+if err := st.session_state.get("mp4_error"):
+    st.error(f"Could not render MP4: {err}")
+
+if mp4_bytes := st.session_state.get("mp4_bytes"):
+    st.download_button(
+        "Download MP4",
+        data=mp4_bytes,
+        file_name=st.session_state.get("mp4_name", "transit.mp4"),
+        mime="video/mp4",
+    )
+    st.video(mp4_bytes)
