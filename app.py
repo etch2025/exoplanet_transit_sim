@@ -532,7 +532,6 @@ def render_lightcurve_png(
     ax.set_xlabel("Phase")
     ax.set_ylabel("Solar Luminosities")
     ax.grid(True, alpha=0.3)
-    ax.axvline(0, color="gray", lw=1, ls="--")
 
     buf = io.BytesIO()
     try:
@@ -615,7 +614,7 @@ if generate or "gif_bytes" not in st.session_state or "lc_png_bytes" not in st.s
         gif_bytes = cached_render(
             render_gif, "gif", anim_kwargs, progress_callback=_gif_progress,
         )
-        lc_png_bytes = cached_render(render_lightcurve_png, "lc_png", anim_kwargs)
+        lc_png_bytes = cached_render(render_lightcurve_png, "lc_png_v2", anim_kwargs)
         # Keep diagnostics only — not full light-curve arrays — to save memory.
         st.session_state["gif_bytes"] = gif_bytes
         st.session_state["lc_png_bytes"] = lc_png_bytes
