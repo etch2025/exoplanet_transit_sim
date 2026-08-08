@@ -379,8 +379,8 @@ def _build_animation(
     ax_orbit.add_patch(star2_patch)
     ax_orbit.legend(
         handles=[
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=primary_color, markersize=10, label="m1"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=planet_color, markersize=10, label="m2"),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor=primary_color, markersize=10),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor=planet_color, markersize=10),
         ],
         loc="upper right",
     )
